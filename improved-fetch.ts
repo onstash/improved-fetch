@@ -81,8 +81,8 @@ interface ImprovedFetchParamInit extends NonNullable<FetchParams[1]> {
 type ImprovedFetchParams = [FetchParams[0], ImprovedFetchParamInit];
 
 // Type-safe result type
-type ImprovedFetchResult<T = Response> =
-  | { success: true; response: T; error: null }
+type ImprovedFetchResult =
+  | { success: true; response: Response; error: null }
   | { success: false; response: null; error: Error };
 
 class FetchTimeoutError extends Error {
@@ -120,7 +120,7 @@ class FetchSchemaValidationError extends Error {
 }
 
 // Helper function to calculate retry delay
-function calculateRetryDelay(config: RetryConfig, attempt: number): number {
+function _calculateRetryDelay(config: RetryConfig, attempt: number): number {
   if (config.strategy === 'linear') {
     return config.delay;
   }
@@ -129,7 +129,7 @@ function calculateRetryDelay(config: RetryConfig, attempt: number): number {
   return Math.min(delay, config.maxDelay);
 }
 
-async function improvedFetchCore(
+async function _improvedFetchCore(
   input: FetchParams[0],
   init: ImprovedFetchParamInit
 ): Promise<Response> {
@@ -199,7 +199,7 @@ async function improvedFetchCore(
           : true; // Default: retry on any non-ok response
 
         if (shouldRetry) {
-          const delay = calculateRetryDelay(retry, attempt);
+          const delay = _calculateRetryDelay(retry, attempt);
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
@@ -244,7 +244,7 @@ async function improvedFetchCore(
         if (!shouldRetry) throw lastError;
       }
 
-      const delay = calculateRetryDelay(retry, attempt);
+      const delay = _calculateRetryDelay(retry, attempt);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -253,10 +253,10 @@ async function improvedFetchCore(
   throw lastError || new FetchRetryError(lastResponse, retry.attempts + 1);
 }
 
-async function improvedFetch(
+export async function improvedFetch(
   ...args: ImprovedFetchParams
 ): Promise<ImprovedFetchResult> {
-  return improvedFetchCore(...args)
+  return _improvedFetchCore(...args)
     .then((response) => ({ success: true as const, response, error: null }))
     .catch((err: unknown) => ({
       success: false as const,
@@ -265,7 +265,7 @@ async function improvedFetch(
     }));
 }
 
-function createSchemaV1<Input = unknown, Output = unknown>(
+export function createStandardSchemaV1<Input = unknown, Output = unknown>(
   validate: (
     value: unknown
   ) =>
@@ -282,33 +282,71 @@ function createSchemaV1<Input = unknown, Output = unknown>(
   };
 }
 
-// Example
-// const numberSchema = createSchemaV1((value) => {
-//   // Check if value is a number
-//   if (typeof value !== 'number') {
-//     return {
-//       issues: [
-//         {
-//           message: `Expected number but received ${typeof value}`,
-//           path: [], // Empty array for root-level error, or omit entirely
-//         },
-//       ],
-//     };
-//   }
+const numberSchema = createStandardSchemaV1((value) => {
+  // Check if value is a number
+  if (typeof value !== 'number') {
+    return {
+      issues: [
+        {
+          message: `Expected number but received ${typeof value}`,
+          path: [], // Empty array for root-level error, or omit entirely
+        },
+      ],
+    };
+  }
 
-//   // Check if value is NaN
-//   if (Number.isNaN(value)) {
-//     return {
-//       issues: [
-//         {
-//           message: 'Value is NaN',
-//           path: [],
-//         },
-//       ],
-//     };
-//   }
+  // Check if value is NaN
+  if (Number.isNaN(value)) {
+    return {
+      issues: [
+        {
+          message: 'Value is NaN',
+          path: [],
+        },
+      ],
+    };
+  }
 
-//   return {
-//     value,
-//   };
+  return {
+    value,
+  };
+});
+
+type NumberInput = StandardSchemaV1.InferInput<typeof numberSchema>;
+
+type NumberOutput = StandardSchemaV1.InferOutput<typeof numberSchema>;
+
+// Usage Examples:
+
+// Linear retry strategy
+// improvedFetch('https://api.example.com/data', {
+//   method: 'GET',
+//   timeout: 5000,
+//   retry: {
+//     strategy: 'linear',
+//     attempts: 3,
+//     delay: 2000, // 2 seconds between each retry
+//     shouldRetry: async (response, attempt) => {
+//       console.log(
+//         `Attempt ${attempt + 1} failed with status ${response.status}`
+//       );
+//       return response.status >= 500; // Only retry server errors
+//     },
+//   },
+// });
+
+// // Exponential backoff retry strategy
+// improvedFetch('https://api.example.com/data', {
+//   method: 'POST',
+//   headers: { 'Content-Type': 'application/json' },
+//   body: JSON.stringify({ key: 'value' }),
+//   timeout: 5000,
+//   retry: {
+//     strategy: 'exponential',
+//     attempts: 4,
+//     backOffFactor: 2,
+//     baseDelay: 1000, // Start at 1s
+//     maxDelay: 10000, // Cap at 10s
+//     // Delays will be: 1s, 2s, 4s, 8s (capped if > 10s)
+//   },
 // });
