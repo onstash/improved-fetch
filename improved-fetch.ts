@@ -265,6 +265,13 @@ export async function improvedFetch(
     }));
 }
 
+export function createStandardSchemaV1<Output = unknown>(
+  validate: (
+    value: unknown
+  ) =>
+    | StandardSchemaV1.Result<Output>
+    | Promise<StandardSchemaV1.Result<Output>>
+): StandardSchemaV1<unknown, Output>;
 export function createStandardSchemaV1<Input = unknown, Output = unknown>(
   validate: (
     value: unknown
@@ -282,71 +289,51 @@ export function createStandardSchemaV1<Input = unknown, Output = unknown>(
   };
 }
 
-const numberSchema = createStandardSchemaV1((value) => {
-  // Check if value is a number
-  if (typeof value !== 'number') {
-    return {
-      issues: [
-        {
-          message: `Expected number but received ${typeof value}`,
-          path: [], // Empty array for root-level error, or omit entirely
-        },
-      ],
-    };
-  }
+// Usage Example
+// const dummyJSONSchema = createStandardSchemaV1<{ status: 'ok'; method: 'GET' }>(
+//   (value: unknown) => {
+//     // Proper type guard
+//     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+//       const obj = value as Record<string, unknown>;
 
-  // Check if value is NaN
-  if (Number.isNaN(value)) {
-    return {
-      issues: [
-        {
-          message: 'Value is NaN',
-          path: [],
-        },
-      ],
-    };
-  }
+//       // Check properties exist and have correct values
+//       if (obj.status === 'ok' && obj.method === 'GET') {
+//         // Type assertion after validation
+//         return {
+//           value: value as { status: 'ok'; method: 'GET' },
+//         };
+//       }
+//     }
 
-  return {
-    value,
-  };
-});
+//     return {
+//       issues: [
+//         {
+//           message: 'Invalid response: expected { status: "ok", method: "GET" }',
+//         },
+//       ],
+//     };
+//   }
+// );
 
-type NumberInput = StandardSchemaV1.InferInput<typeof numberSchema>;
-
-type NumberOutput = StandardSchemaV1.InferOutput<typeof numberSchema>;
-
-// Usage Examples:
-
-// Linear retry strategy
-// improvedFetch('https://api.example.com/data', {
+// // 'https://dummyjson.com/test'
+// improvedFetch('https://dummyjson.com/test', {
 //   method: 'GET',
-//   timeout: 5000,
+//   headers: {
+//     'Content-Type': 'application/json',
+//   },
+//   timeout: 1000,
 //   retry: {
 //     strategy: 'linear',
-//     attempts: 3,
-//     delay: 2000, // 2 seconds between each retry
-//     shouldRetry: async (response, attempt) => {
-//       console.log(
-//         `Attempt ${attempt + 1} failed with status ${response.status}`
-//       );
-//       return response.status >= 500; // Only retry server errors
-//     },
+//     delay: 0,
+//     attempts: 1,
 //   },
-// });
-
-// // Exponential backoff retry strategy
-// improvedFetch('https://api.example.com/data', {
-//   method: 'POST',
-//   headers: { 'Content-Type': 'application/json' },
-//   body: JSON.stringify({ key: 'value' }),
-//   timeout: 5000,
-//   retry: {
-//     strategy: 'exponential',
-//     attempts: 4,
-//     backOffFactor: 2,
-//     baseDelay: 1000, // Start at 1s
-//     maxDelay: 10000, // Cap at 10s
-//     // Delays will be: 1s, 2s, 4s, 8s (capped if > 10s)
-//   },
+//   schema: dummyJSONSchema,
+// }).then(({ response, error }) => {
+//   if (error) {
+//     console.error(error);
+//   } else if (!response) {
+//     console.log('response is', response);
+//   } else {
+//     console.log(response);
+//   }
 // });
