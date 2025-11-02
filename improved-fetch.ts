@@ -53,7 +53,6 @@ export declare namespace StandardSchemaV1 {
 
 type FetchParams = Parameters<typeof fetch>;
 
-// Fixed: Use discriminated union instead of intersection
 interface BaseRetryConfig {
   attempts: number;
   shouldRetry?: (responseCloned: Response, attempt: number) => Promise<boolean>;
@@ -71,13 +70,11 @@ interface ExponentialRetryConfig extends BaseRetryConfig {
   maxDelay: number; // cap on delay to prevent excessive waits
 }
 
-// Fixed: Union type instead of intersection
 type RetryConfig = LinearRetryConfig | ExponentialRetryConfig;
 
-// Separate interfaces for different modes
 interface ImprovedFetchParamInit extends NonNullable<FetchParams[1]> {
   timeout: number;
-  schema?: StandardSchemaV1;
+  schema: StandardSchemaV1;
   retry: RetryConfig;
 }
 
